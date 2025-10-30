@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "variante.h"
 #include "readcmd.h"
@@ -58,6 +61,64 @@ void terminate(char *line) {
 	exit(0);
 }
 
+//fonction et variables ajoutées
+typedef struct job {
+	int pid;
+	char* nom;
+	struct job* suivant;
+} job;
+
+struct job* liste_job = NULL;
+void add_jobs(int pid,char* nom){
+	//ajoute en tête
+	job* new_job = malloc(sizeof(job));
+	new_job->pid = pid;
+	new_job->nom = strdup(nom);
+	if(liste_job == NULL){
+		new_job->suivant = NULL;
+	}
+	else{
+		new_job->suivant = liste_job;
+	}
+	liste_job = new_job;
+}
+void delete_job(){
+	// teste tous les jobs pour supprimer ceux qui sont fini
+	job* cur = liste_job;
+	job* prev = NULL;
+	int status;
+	int ret;
+
+	while(cur){
+		ret = waitpid(cur->pid,&status,WNOHANG);
+		if(ret == cur->pid){ // si le processus est arreté
+			if(prev){
+				prev->suivant = cur->suivant;
+				free(cur->nom);
+				free(cur);
+				cur = prev->suivant;
+			}
+			else{
+				liste_job = cur->suivant;
+				free(cur->nom);
+				free(cur);
+				cur = liste_job;
+			}
+		}
+		else{
+			prev = cur;
+            cur = cur->suivant;
+		}
+	}
+}
+void print_jobs(){
+		job* cur = liste_job;
+		printf("commandes en tâche de fond:\n");
+		while(cur){
+			printf(" pid: %i , commande: %s \n", cur->pid,cur->nom);
+			cur = cur->suivant;
+		}	
+}
 
 int main() {
         printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
@@ -107,14 +168,34 @@ int main() {
 			terminate(0);
 		}
 		
-
-		
 		if (l->err) {
 			/* Syntax error, read another command */
 			printf("error: %s\n", l->err);
 			continue;
 		}
-
+		
+		if (l->seq){
+			// commande job 
+			if (strcmp(l->seq[0][0], "jobs") == 0) {
+				//int pid = fork();
+				delete_job();
+				print_jobs(); 
+			}
+			else{
+				int pid = fork();
+				if(pid == 0){
+				execvp(l->seq[0][0],l->seq[0]);
+				}
+				if(l->bg){ // tache de fond
+					// on ajoute dans la liste
+					add_jobs(pid,l->seq[0][0]);
+				}
+				else{
+					int wstatus;
+					int child_pid = wait(&wstatus);
+				}
+			}	
+		}
 		if (l->in) printf("in: %s\n", l->in);
 		if (l->out) printf("out: %s\n", l->out);
 		if (l->bg) printf("background (&)\n");
