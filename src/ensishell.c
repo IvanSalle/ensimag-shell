@@ -12,9 +12,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+
 #include "variante.h"
 #include "readcmd.h"
-
 #ifndef VARIANTE
 #error "Variante non défini !!"
 #endif
@@ -173,8 +176,51 @@ int main() {
 			printf("error: %s\n", l->err);
 			continue;
 		}
-		
-		if (l->seq){
+		if(l->seq[1] != NULL){ // il a plus d'une commande (donc pipe)
+			// variables
+			int prev_pipe[2];
+			int cur_pipe[2];
+			int pid;
+			int prev_existe = 0;
+			for (i=0; l->seq[i] != NULL; i++){
+				if(l->seq[i+1] != NULL ) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
+				pid = fork();
+
+				if (pid == 0){
+					if(prev_existe){// si pas la premiere commande (si il y a un prev_pipe)
+						// on met la lecture du pipe dans l'entrée standard
+						dup2(prev_pipe[0],STDIN);
+						close(prev_pipe[0]);
+						close(prev_pipe[1]);
+					}
+					//si pas la derniere commande
+					if(l->seq[i+1] != NULL ){
+						// on ecrit dans le pipe avec la sortie standard
+						dup2(cur_pipe[1],STDOUT);
+						close(cur_pipe[0]);
+						close(cur_pipe[1]);
+					}
+					
+					execvp(l->seq[i][0],l->seq[i]);
+				}	
+					if(prev_existe){
+						close(prev_pipe[0]);
+						close(prev_pipe[1]);
+					}
+					if(l->seq[i+1] != NULL ){ // pas la derniere cmd
+						prev_pipe[0] = cur_pipe[0];
+						prev_pipe[1] = cur_pipe[1];
+						prev_existe = 1;
+					}
+					
+			}
+			if (!l->bg) {
+				int status;
+				while (wait(&status) > 0);
+			}
+
+		}
+		else if(l->seq[0] != NULL){ // il y a une seule commande 
 			// commande job 
 			if (strcmp(l->seq[0][0], "jobs") == 0) {
 				//int pid = fork();
@@ -195,20 +241,24 @@ int main() {
 					int child_pid = wait(&wstatus);
 				}
 			}	
-		}
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
-		if (l->bg) printf("background (&)\n");
+		} 
+		
+		/*
+		if (l->in){
+			printf("in: %s\n", l->in);
+		} */
+		//if (l->out) printf("out: %s\n", l->out);
+		//if (l->bg) printf("background (&)\n");
 
 		/* Display each command of the pipe */
-		for (i=0; l->seq[i]!=0; i++) {
+		/*for (i=0; l->seq[i]!=0; i++) {
 			char **cmd = l->seq[i];
 			printf("seq[%d]: ", i);
                         for (j=0; cmd[j]!=0; j++) {
                                 printf("'%s' ", cmd[j]);
                         }
 			printf("\n");
-		}
+		}*/
 	}
 
 }
