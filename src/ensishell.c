@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #define STDIN 0
 #define STDOUT 1
@@ -225,12 +226,22 @@ int main() {
 			if (strcmp(l->seq[0][0], "jobs") == 0) {
 				//int pid = fork();
 				delete_job();
-				print_jobs(); 
+				print_jobs();
 			}
 			else{
 				int pid = fork();
 				if(pid == 0){
-				execvp(l->seq[0][0],l->seq[0]);
+					if (l->in){ // si il y a un fichier en entrée
+						int fd_in = open(l->in,O_RDONLY);
+						dup2(fd_in,STDIN);
+						close(fd_in);
+					}
+					if (l->out){ //si il y a un fichier en sortie
+						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+						dup2(fd_out,STDOUT);
+						close(fd_out);
+					}
+					execvp(l->seq[0][0],l->seq[0]);
 				}
 				if(l->bg){ // tache de fond
 					// on ajoute dans la liste
