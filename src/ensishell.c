@@ -238,6 +238,7 @@ int main() {
 					}
 					if (l->out){ //si il y a un fichier en sortie
 						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+						ftruncate(fd_out, 0);
 						dup2(fd_out,STDOUT);
 						close(fd_out);
 					}
