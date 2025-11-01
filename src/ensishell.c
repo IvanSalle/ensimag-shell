@@ -41,9 +41,8 @@ int question6_executer(char *line)
 	 */
 
 	
-	l = parsecmd( & line);
-	exec_cmd_simple(l)
-	
+	struct cmdline* l = parsecmd( & line);
+	exec_cmd_simple(l);
 	return 0;
 }
 
