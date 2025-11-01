@@ -81,14 +81,14 @@ endif()
 ####
 # Detect if gnu readline header is present, otherwise use internal readline
 ####
-find_path(READLINE_PATH "readline/readline.h" PATHS /opt/homebrew/opt/readline/include)
-if(READLINE_PATH)
-    set(USE_GNU_READLINE 1)
-    set(READLINE_LDFLAGS "-L/opt/homebrew/opt/readline/lib -lreadline -lhistory")
+find_path(READLINE_PATH "include/readline/readline.h")
+if (NOT "${READLINE_PATH}" STREQUAL "")
+  set(USE_GNU_READLINE 1)
+  set(READLINE_LDFLAGS readline history)
 else()
-    set(USE_GNU_READLINE 0)
+  set(USE_GNU_READLINE 0)
+  set(READLINE_LDFLAGS)
 endif()
-
 
 
 # Debug build
@@ -96,7 +96,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${GUILE_CFLAGS} -Wall -Wextra")
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}  -Wall -Wextra")
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fanalyzer")
 endif()
 
 #########

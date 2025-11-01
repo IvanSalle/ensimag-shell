@@ -12,10 +12,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+ #include <wordexp.h>
 
 #define STDIN 0
 #define STDOUT 1
 #define STDERR 2
+#define TAILLE_PARAM_MAX 255
 
 #include "variante.h"
 #include "readcmd.h"
@@ -122,6 +124,29 @@ void print_jobs(){
 			cur = cur->suivant;
 		}	
 }
+wordexp_t remplacer_joker(struct cmdline* l,int cmd){ // ne pas oublier de free 
+	// compter le nb de param pour cette commande
+	int nb_param = 0;
+	while(l->seq[cmd][nb_param] != NULL) {
+				nb_param++;
+	}
+	// concatener les parametres en un char*
+	int taille_str = 0;
+	for (int j = 0; j < nb_param; j++) {
+			taille_str += strlen(l->seq[cmd][j]) + 1;
+	}
+	taille_str++; // pour le \0
+	char* str_param = calloc(taille_str, sizeof(char));
+	for (int j = 0; j < nb_param; j++) {
+			strlcat(str_param, l->seq[cmd][j],taille_str);
+			if (j < nb_param - 1)
+			strlcat(str_param, " ",taille_str);
+	}
+	wordexp_t w;
+	int ret = wordexp(str_param,&w,0);
+	free(str_param);
+	return w;
+}
 void exec_cmd_avec_pipes(struct cmdline* l){
 			int nb_cmd = 0;
 			while(l->seq[nb_cmd] != NULL) {
@@ -186,8 +211,9 @@ void exec_cmd_avec_pipes(struct cmdline* l){
 			}
 		}
 void exec_cmd_simple(struct cmdline* l){
+		wordexp_t w = remplacer_joker(l,0);
 		// commande job 
-			if (strcmp(l->seq[0][0], "jobs") == 0) {
+			if (strcmp(w.we_wordv[0], "jobs") == 0) {
 				//int pid = fork();
 				delete_job();
 				print_jobs();
@@ -206,11 +232,11 @@ void exec_cmd_simple(struct cmdline* l){
 						dup2(fd_out,STDOUT);
 						close(fd_out);
 					}
-					execvp(l->seq[0][0],l->seq[0]);
+					execvp(w.we_wordv[0],w.we_wordv);
 				}
 				if(l->bg){ // tache de fond
 					// on ajoute dans la liste
-					add_jobs(pid,l->seq[0][0]);
+					add_jobs(pid,w.we_wordv[0]);
 				}
 				else{
 					int wstatus;
@@ -218,6 +244,7 @@ void exec_cmd_simple(struct cmdline* l){
 				}
 			}	
 };
+
 	
 int main(){
         printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
@@ -231,7 +258,6 @@ int main(){
 	while (1) {
 		struct cmdline *l;
 		char *line=0;
-		int i, j;
 		char *prompt = "ensishell>";
 
 		/* Readline use some internal memory structure that
