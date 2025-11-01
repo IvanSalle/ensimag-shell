@@ -39,10 +39,10 @@ int question6_executer(char *line)
 	 * parsecmd, then fork+execvp, for a single command.
 	 * pipe and i/o redirection are not required.
 	 */
-	printf("Not implemented yet: can not execute %s\n", line);
 
-	/* Remove this line when using parsecmd as it will free it */
-	free(line);
+	
+	l = parsecmd( & line);
+	exec_cmd_simple(l)
 	
 	return 0;
 }
@@ -123,8 +123,104 @@ void print_jobs(){
 			cur = cur->suivant;
 		}	
 }
-
-int main() {
+void exec_cmd_avec_pipes(struct cmdline* l){
+			int nb_cmd = 0;
+			while(l->seq[nb_cmd] != NULL) {
+				nb_cmd++;
+			}
+			// variables
+			int prev_pipe[2];
+			int cur_pipe[2];
+			int pid;
+			int prev_existe = 0;
+			int background = 0;
+			int liste_pid[nb_cmd];
+			for (int i=0; i<nb_cmd; i++){
+				if(i < nb_cmd - 1) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
+				pid = fork();
+				if (pid == 0){
+					if (l->in){ // si il y a un fichier en entrée
+						int fd_in = open(l->in,O_RDONLY);
+						dup2(fd_in,STDIN);
+						close(fd_in);
+					}
+					if (l->out){ //si il y a un fichier en sortie
+						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+						ftruncate(fd_out, 0);
+						dup2(fd_out,STDOUT);
+						close(fd_out);
+					}
+					if(prev_existe){// si pas la premiere commande (si il y a un prev_pipe)
+						// on met la lecture du pipe dans l'entrée standard
+						dup2(prev_pipe[0],STDIN);
+						close(prev_pipe[0]);
+						close(prev_pipe[1]);
+					}
+					//si pas la derniere commande
+					if(i < nb_cmd - 1  ){
+						// on ecrit dans le pipe avec la sortie standard
+						dup2(cur_pipe[1],STDOUT);
+						close(cur_pipe[0]);
+						close(cur_pipe[1]);
+					}
+					
+					execvp(l->seq[i][0],l->seq[i]);
+				}	
+				if(prev_existe){
+					close(prev_pipe[0]);
+					close(prev_pipe[1]);
+				}
+				if(i < nb_cmd - 1){ // pas la derniere cmd
+					prev_pipe[0] = cur_pipe[0];
+					prev_pipe[1] = cur_pipe[1];
+					prev_existe = 1;
+				}
+				if(l->bg) background = 1 ;// toutes les commandes s'execute en fond
+				// on ajoute le pid a la liste
+				liste_pid[i] = pid;
+			}
+			if(!background){
+				int status;
+				for(int i =0; i<nb_cmd; i++){
+					waitpid(liste_pid[i],&status,0);
+				}
+			}
+		}
+void exec_cmd_simple(struct cmdline* l){
+		// commande job 
+			if (strcmp(l->seq[0][0], "jobs") == 0) {
+				//int pid = fork();
+				delete_job();
+				print_jobs();
+			}
+			else{
+				int pid = fork();
+				if(pid == 0){
+					if (l->in){ // si il y a un fichier en entrée
+						int fd_in = open(l->in,O_RDONLY);
+						dup2(fd_in,STDIN);
+						close(fd_in);
+					}
+					if (l->out){ //si il y a un fichier en sortie
+						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+						ftruncate(fd_out, 0);
+						dup2(fd_out,STDOUT);
+						close(fd_out);
+					}
+					execvp(l->seq[0][0],l->seq[0]);
+				}
+				if(l->bg){ // tache de fond
+					// on ajoute dans la liste
+					add_jobs(pid,l->seq[0][0]);
+				}
+				else{
+					int wstatus;
+					int child_pid = wait(&wstatus);
+				}
+			}	
+};
+	
+int main(){
         printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
 
 #if USE_GUILE == 1
@@ -178,91 +274,10 @@ int main() {
 			continue;
 		}
 		if(l->seq[1] != NULL){ // il a plus d'une commande (donc pipe)
-			// variables
-			int prev_pipe[2];
-			int cur_pipe[2];
-			int pid;
-			int prev_existe = 0;
-			for (i=0; l->seq[i] != NULL; i++){
-				if(l->seq[i+1] != NULL ) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
-				pid = fork();
-				if (pid == 0){
-					if (l->in){ // si il y a un fichier en entrée
-						int fd_in = open(l->in,O_RDONLY);
-						dup2(fd_in,STDIN);
-						close(fd_in);
-					}
-					if (l->out){ //si il y a un fichier en sortie
-						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
-						ftruncate(fd_out, 0);
-						dup2(fd_out,STDOUT);
-						close(fd_out);
-					}
-					if(prev_existe){// si pas la premiere commande (si il y a un prev_pipe)
-						// on met la lecture du pipe dans l'entrée standard
-						dup2(prev_pipe[0],STDIN);
-						close(prev_pipe[0]);
-						close(prev_pipe[1]);
-					}
-					//si pas la derniere commande
-					if(l->seq[i+1] != NULL ){
-						// on ecrit dans le pipe avec la sortie standard
-						dup2(cur_pipe[1],STDOUT);
-						close(cur_pipe[0]);
-						close(cur_pipe[1]);
-					}
-					
-					execvp(l->seq[i][0],l->seq[i]);
-				}	
-					if(prev_existe){
-						close(prev_pipe[0]);
-						close(prev_pipe[1]);
-					}
-					if(l->seq[i+1] != NULL ){ // pas la derniere cmd
-						prev_pipe[0] = cur_pipe[0];
-						prev_pipe[1] = cur_pipe[1];
-						prev_existe = 1;
-					}
-					
-			}
-			if (!l->bg) {
-				int status;
-				while (wait(&status) > 0);
-			}
-
+			exec_cmd_avec_pipes(l);
 		}
 		else if(l->seq[0] != NULL){ // il y a une seule commande 
-			// commande job 
-			if (strcmp(l->seq[0][0], "jobs") == 0) {
-				//int pid = fork();
-				delete_job();
-				print_jobs();
-			}
-			else{
-				int pid = fork();
-				if(pid == 0){
-					if (l->in){ // si il y a un fichier en entrée
-						int fd_in = open(l->in,O_RDONLY);
-						dup2(fd_in,STDIN);
-						close(fd_in);
-					}
-					if (l->out){ //si il y a un fichier en sortie
-						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
-						ftruncate(fd_out, 0);
-						dup2(fd_out,STDOUT);
-						close(fd_out);
-					}
-					execvp(l->seq[0][0],l->seq[0]);
-				}
-				if(l->bg){ // tache de fond
-					// on ajoute dans la liste
-					add_jobs(pid,l->seq[0][0]);
-				}
-				else{
-					int wstatus;
-					int child_pid = wait(&wstatus);
-				}
-			}	
+			exec_cmd_simple(l);
 		} 
 		
 		/*
