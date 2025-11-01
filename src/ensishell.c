@@ -12,7 +12,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
- #include <wordexp.h>
+#include <wordexp.h>
+include <glob.h>
 
 #define STDIN 0
 #define STDOUT 1
@@ -124,7 +125,7 @@ void print_jobs(){
 			cur = cur->suivant;
 		}	
 }
-wordexp_t remplacer_joker(struct cmdline* l,int cmd){ // ne pas oublier de free 
+void remplacer_joker(struct cmdline* l,int cmd){
 	// compter le nb de param pour cette commande
 	int nb_param = 0;
 	while(l->seq[cmd][nb_param] != NULL) {
@@ -144,8 +145,34 @@ wordexp_t remplacer_joker(struct cmdline* l,int cmd){ // ne pas oublier de free
 	}
 	wordexp_t w;
 	int ret = wordexp(str_param,&w,0);
-	free(str_param);
-	return w;
+
+	char* new_seq = NULL;
+	int taille_new_seq = 0;
+	for(int i = 0; i < w.we_wordc; i++){
+		glob_t g;
+		int ret = glob(w.we_wordv[i], 0, NULL, &g);
+		if(ret == 0){ // si correspondance
+			for (int j = 0; j < g.gl_pathc; j++) { //on ajoute toutes les corresp. a la liste
+                new_seq = realloc(new_seq, sizeof(char*) *(taille_new_seq + 1)); // on agrandit new_seq
+                new_seq[taille_new_seq] = strdup(g.gl_pathv[j]);  // on agrandit new_seq
+                taille_new_seq++;
+            }
+		}
+		else{
+			new_seq = realloc(new_seq, sizeof(char*) *(taille_new_seq + 1));
+            new_seq[taille_new_seq] = strdup(w.we_wordv[i]); 
+            taille_new_seq++;
+		}
+		globfree(&g);
+	}
+	new_seq = realloc(new_seq, sizeof(char*) *(new_count + 1));
+    	new_seq[new_count] = NULL; // fin
+
+		for (int j = 0; j < nb_param; j++) free(l->seq[cmd][j]);
+		free(l->seq[cmd]);
+		l->seq[cmd] = new_seq;
+	wordfree(&w);
+    free(str_param);
 }
 void exec_cmd_avec_pipes(struct cmdline* l){
 			int nb_cmd = 0;
@@ -211,9 +238,9 @@ void exec_cmd_avec_pipes(struct cmdline* l){
 			}
 		}
 void exec_cmd_simple(struct cmdline* l){
-		wordexp_t w = remplacer_joker(l,0);
+		remplacer_joker(l,0);
 		// commande job 
-			if (strcmp(w.we_wordv[0], "jobs") == 0) {
+			if (strcmp(l->seq[0][0], "jobs") == 0) {
 				//int pid = fork();
 				delete_job();
 				print_jobs();
@@ -232,11 +259,11 @@ void exec_cmd_simple(struct cmdline* l){
 						dup2(fd_out,STDOUT);
 						close(fd_out);
 					}
-					execvp(w.we_wordv[0],w.we_wordv);
+					execvp(l->seq[0][0],l->seq[0]);
 				}
 				if(l->bg){ // tache de fond
 					// on ajoute dans la liste
-					add_jobs(pid,w.we_wordv[0]);
+					add_jobs(pid,l->seq[0][0]);
 				}
 				else{
 					int wstatus;
