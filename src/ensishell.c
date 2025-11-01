@@ -186,8 +186,18 @@ int main() {
 			for (i=0; l->seq[i] != NULL; i++){
 				if(l->seq[i+1] != NULL ) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
 				pid = fork();
-
 				if (pid == 0){
+					if (l->in){ // si il y a un fichier en entrée
+						int fd_in = open(l->in,O_RDONLY);
+						dup2(fd_in,STDIN);
+						close(fd_in);
+					}
+					if (l->out){ //si il y a un fichier en sortie
+						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+						ftruncate(fd_out, 0);
+						dup2(fd_out,STDOUT);
+						close(fd_out);
+					}
 					if(prev_existe){// si pas la premiere commande (si il y a un prev_pipe)
 						// on met la lecture du pipe dans l'entrée standard
 						dup2(prev_pipe[0],STDIN);
