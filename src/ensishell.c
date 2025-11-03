@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <wordexp.h>
-include <glob.h>
+#include <glob.h>
 
 #define STDIN 0
 #define STDOUT 1
@@ -125,6 +125,74 @@ void print_jobs(){
 			cur = cur->suivant;
 		}	
 }
+char* concat_et_aggrandi(char *dest, const char *src) { // concatene deux chaine et aggrandi si necessaire
+    if (!dest) {
+        dest = malloc(strlen(src) + 1);
+        strcpy(dest, src);
+    } else {
+        size_t new_len = strlen(dest) + strlen(src) + 2; // "\0 et espace"
+        dest = realloc(dest, new_len);
+        strcat(dest, " ");
+        strcat(dest, src);
+    }
+    return dest;
+}
+char* gerer_accolade_mot_simple(const char *word) {
+    char *result = NULL;
+
+    const char *open = strchr(word, '{');
+    if (!open) return strdup(word); // le mot normal si pas d'accolade 
+
+    char prefix[256];
+    strncpy(prefix, word, open - word);
+    prefix[open - word] = '\0';
+
+    const char *close = strchr(open, '}');
+    char brace[256];
+    strncpy(brace, open + 1, close - open - 1);
+    brace[close - open - 1] = '\0';
+
+    const char *suffix = close + 1;
+
+    char *token = strtok(brace, ",");
+    while (token) {
+        char tmp[512];
+        snprintf(tmp, sizeof(tmp), "%s%s%s", prefix, token, suffix);
+        if (!result) {
+            result = strdup(tmp);
+        } else {
+            size_t len = strlen(result) + strlen(tmp) + 2;
+            result = realloc(result, len);
+            strcat(result, " ");
+            strcat(result, tmp);
+        }
+        token = strtok(NULL, ",");
+    }
+
+    return result;
+}
+char* gerer_accolade_plusieurs_mots(const char *line) {
+    char *result = NULL;
+    char *copy = strdup(line); 
+    char *mot = strtok(copy, " "); //
+
+    while (mot) {
+        char *mot_developpe = gerer_accolade_mot_simple(mot);
+        if (!result) {
+            result = strdup(mot_developpe);
+        } else {
+            size_t len = strlen(result) + strlen(mot_developpe) + 2;
+            result = realloc(result, len);
+            strcat(result, " ");
+            strcat(result, mot_developpe);
+        }
+        free(mot_developpe);
+        mot = strtok(NULL, " ");
+    }
+    free(copy);
+    return result;
+}
+
 void remplacer_joker(struct cmdline* l,int cmd){
 	// compter le nb de param pour cette commande
 	int nb_param = 0;
@@ -134,23 +202,27 @@ void remplacer_joker(struct cmdline* l,int cmd){
 	// concatener les parametres en un char*
 	int taille_str = 0;
 	for (int j = 0; j < nb_param; j++) {
-			taille_str += strlen(l->seq[cmd][j]) + 1;
+		taille_str += strlen(l->seq[cmd][j]) + 1;
 	}
 	taille_str++; // pour le \0
 	char* str_param = calloc(taille_str, sizeof(char));
 	for (int j = 0; j < nb_param; j++) {
 			strlcat(str_param, l->seq[cmd][j],taille_str);
-			if (j < nb_param - 1)
-			strlcat(str_param, " ",taille_str);
+			if (j < nb_param - 1){
+				strlcat(str_param, " ",taille_str);}
+			
 	}
+	// on gere les accolades
+	str_param = gerer_accolade_plusieurs_mots(str_param);
 	wordexp_t w;
 	int ret = wordexp(str_param,&w,0);
-
-	char* new_seq = NULL;
+	if (ret != 0) fprintf(stderr, "wordexp failed: %d\n", ret);
+	char** new_seq = NULL;
 	int taille_new_seq = 0;
 	for(int i = 0; i < w.we_wordc; i++){
 		glob_t g;
 		int ret = glob(w.we_wordv[i], 0, NULL, &g);
+		if (ret != 0) fprintf(stderr, "glob failed: %d\n", ret);
 		if(ret == 0){ // si correspondance
 			for (int j = 0; j < g.gl_pathc; j++) { //on ajoute toutes les corresp. a la liste
                 new_seq = realloc(new_seq, sizeof(char*) *(taille_new_seq + 1)); // on agrandit new_seq
@@ -165,8 +237,9 @@ void remplacer_joker(struct cmdline* l,int cmd){
 		}
 		globfree(&g);
 	}
-	new_seq = realloc(new_seq, sizeof(char*) *(new_count + 1));
-    	new_seq[new_count] = NULL; // fin
+	// on ajoute le char de fin
+	new_seq = realloc(new_seq, sizeof(char*) *(taille_new_seq + 1));
+    	new_seq[taille_new_seq] = NULL;
 
 		for (int j = 0; j < nb_param; j++) free(l->seq[cmd][j]);
 		free(l->seq[cmd]);
