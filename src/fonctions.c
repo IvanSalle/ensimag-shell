@@ -296,9 +296,11 @@ void handler_childsig(int sig) {
 
 
 void initialiser_sigchild(){
-    struct sigaction sa;
+     struct sigaction sa;
+    memset(&sa, 0, sizeof(sa)); // toujours nettoyer la struct
     sa.sa_handler = handler_childsig;
     sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // ignore les stop, relance syscalls interrompus
     sigaction(SIGCHLD, &sa, NULL);
 }
 
@@ -340,7 +342,7 @@ void exec_cmd_simple(struct cmdline* l){
 				}
 				else{
 					int wstatus;
-					int child_pid = waitpid(pid, &wstatus, 0);
+                    waitpid(pid, &wstatus, 0);
 				}
 			}		
 };
