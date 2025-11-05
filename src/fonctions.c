@@ -246,6 +246,7 @@ char* remplacer_joker(struct cmdline* l,int cmd){
 void handler_childsig(int sig) {
     (void)sig;
 
+    job* prev = NULL;
     int status;
     pid_t pid;
 
@@ -272,8 +273,22 @@ void handler_childsig(int sig) {
                 int len = snprintf(buf, sizeof(buf),
                                    "pid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\n",cur->pid, cur->nom, hours, minutes, secs, useconds);
                 write(STDOUT_FILENO, buf, len);
+                // supprimer le processus de la liste des jobs
+                if(prev){
+				prev->suivant = cur->suivant;
+				free(cur->nom);
+				free(cur);
+				cur = prev->suivant;
+                }
+                else{
+                    liste_job = cur->suivant;
+                    free(cur->nom);
+                    free(cur);
+                    cur = liste_job;
+                }
                 break;
             }
+            prev = cur;
             cur = cur->suivant;
         }
     }
@@ -282,7 +297,7 @@ void handler_childsig(int sig) {
 
 void initialiser_sigchild(){
     struct sigaction sa;
-    sa.sa_sigaction = handler_childsig;
+    sa.sa_handler = handler_childsig;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGCHLD, &sa, NULL);
 }
@@ -325,7 +340,7 @@ void exec_cmd_simple(struct cmdline* l){
 				}
 				else{
 					int wstatus;
-					int child_pid = wait(&wstatus);
+					int child_pid = waitpid(pid, &wstatus, 0);
 				}
 			}		
 };
