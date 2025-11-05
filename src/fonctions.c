@@ -141,7 +141,7 @@ char **supprimer_element_liste(char **liste, int index) {
 
 char* remplacer_joker(struct cmdline* l,int cmd){
     // message d'erreur vaut null si pas d'erreur
-    char* message;
+    char* message = NULL;
 
     int count_param = 0;
     while(l->seq[cmd][count_param] != NULL){ // on compte les parametres 
