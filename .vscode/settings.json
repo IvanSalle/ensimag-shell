@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "fonctions.h": "c",
+        "readcmd.h": "c",
+        "system_error": "c"
+    }
+}
