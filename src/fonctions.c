@@ -284,6 +284,7 @@ void exec_cmd_simple(struct cmdline* l){
 };
 
 void exec_cmd_avec_pipes(struct cmdline* l){
+    
 			int nb_cmd = 0;
 			while(l->seq[nb_cmd] != NULL) {
 				nb_cmd++;
@@ -296,6 +297,14 @@ void exec_cmd_avec_pipes(struct cmdline* l){
 			int background = 0;
 			int liste_pid[nb_cmd];
 			for (int i=0; i<nb_cmd; i++){
+
+                char* message_erreur = remplacer_joker(l,i);
+
+                if (message_erreur) {
+                    printf("Erreur : %s\n", message_erreur);
+                    free(message_erreur);
+                    return;
+                }
 				if(i < nb_cmd - 1) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
 				pid = fork();
 				if (pid == 0){
@@ -335,6 +344,12 @@ void exec_cmd_avec_pipes(struct cmdline* l){
 					prev_pipe[1] = cur_pipe[1];
 					prev_existe = 1;
 				}
+                else{
+                    if(i>0){
+                        close(cur_pipe[0]);
+                        close(cur_pipe[1]); 
+                    }
+                }
 				if(l->bg) background = 1 ;// toutes les commandes s'execute en fond
 				// on ajoute le pid a la liste
 				liste_pid[i] = pid;
