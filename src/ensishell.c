@@ -65,11 +65,12 @@ int main(){
         /* register "executer" function in scheme */
         scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
 #endif
-
+	initialiser_sigchild();
 	while (1) {
 		struct cmdline *l;
 		char *line=0;
 		char *prompt = "ensishell>";
+		int i,j;
 
 		/* Readline use some internal memory structure that
 		   can not be cleaned at the end of the program. Thus
@@ -94,6 +95,7 @@ int main(){
                         continue;
                 }
 #endif
+
 
 		/* parsecmd free line and set it up to 0 */
 		l = parsecmd( & line);
@@ -124,14 +126,14 @@ int main(){
 		//if (l->bg) printf("background (&)\n");
 
 		/* Display each command of the pipe */
-		/*for (i=0; l->seq[i]!=0; i++) {
+		for (i=0; l->seq[i]!=0; i++) {
 			char **cmd = l->seq[i];
 			printf("seq[%d]: ", i);
                         for (j=0; cmd[j]!=0; j++) {
                                 printf("'%s' ", cmd[j]);
                         }
 			printf("\n");
-		}*/
+		}
 	}
 
 }

@@ -1,7 +1,7 @@
 #ifndef VARIANTE_H
 #define VARIANTE_H
 
-#define LOGINS Fleche_Jeremy_flechej_Salle_Ivan_sallei
+#define LOGINS Jeremy_Fleche_flechej_Ivan_Salle_sallei
 #define SUJET 1
 #define USE_GUILE 1
 #define USE_GNU_READLINE 1

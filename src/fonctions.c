@@ -8,6 +8,10 @@ void add_jobs(int pid,char* nom){
 	job* new_job = malloc(sizeof(job));
 	new_job->pid = pid;
 	new_job->nom = strdup(nom);
+    // ajoute le temps de début
+    struct timeval time;
+    int ret = gettimeofday(&time,NULL);
+    new_job->start_time = time;
 	if(liste_job == NULL){
 		new_job->suivant = NULL;
 	}
@@ -239,8 +243,51 @@ char* remplacer_joker(struct cmdline* l,int cmd){
     return message;
 }
 
+void handler_childsig(int sig) {
+    (void)sig;
+
+    int status;
+    pid_t pid;
+
+    // Récupérer tous les fils terminés
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        job* cur = liste_job;
+        while (cur) {
+            if (cur->pid == pid) {
+                struct timeval cur_time;
+                gettimeofday(&cur_time, NULL);
+
+                long seconds  = cur_time.tv_sec  - cur->start_time.tv_sec;
+                long useconds = cur_time.tv_usec - cur->start_time.tv_usec;
+                if (useconds < 0) {
+                    seconds -= 1;
+                    useconds += 1000000;
+                }
+
+                long hours   = seconds / 3600;
+                long minutes = (seconds % 3600) / 60;
+                long secs    = seconds % 60;
+
+                char buf[256];
+                int len = snprintf(buf, sizeof(buf),
+                                   "pid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\n",cur->pid, cur->nom, hours, minutes, secs, useconds);
+                write(STDOUT_FILENO, buf, len);
+                break;
+            }
+            cur = cur->suivant;
+        }
+    }
+}
+
+
+void initialiser_sigchild(){
+    struct sigaction sa;
+    sa.sa_sigaction = handler_childsig;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGCHLD, &sa, NULL);
+}
+
 void exec_cmd_simple(struct cmdline* l){
-        
 		char* message_erreur = remplacer_joker(l,0);
 
          if (message_erreur) {

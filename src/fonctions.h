@@ -11,6 +11,9 @@
 #include <wordexp.h>
 #include <glob.h>
 #include "readcmd.h"
+#include <signal.h>
+#include <sys/time.h>  
+
 
 #define STDIN 0
 #define STDOUT 1
@@ -21,6 +24,7 @@
 typedef struct job {
 	int pid;
 	char* nom;
+	struct timeval start_time;
 	struct job* suivant;
 } job;
 
@@ -33,6 +37,10 @@ void delete_job();
 
 /* affiche les tâches de fond de la liste*/
 void print_jobs();
+
+void initialiser_sigchild();
+
+void handler_childsig(int sig);
 
 /* remplace les accolades par le ou les mots correspondants*/
 char **gerer_accolade_mot_simple(const char *word);
