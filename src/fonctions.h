@@ -13,6 +13,7 @@
 #include "readcmd.h"
 #include <signal.h>
 #include <sys/time.h>  
+#include <sys/resource.h>
 
 
 #define STDIN 0
@@ -38,8 +39,10 @@ void delete_job();
 /* affiche les tâches de fond de la liste*/
 void print_jobs();
 
+/* initialise l'action effectué quand un processus de fond enfant se termine */
 void initialiser_sigchild();
 
+/* affiche le temps d'execution et le processus de fond qui vient de se terminer*/
 void handler_childsig(int sig);
 
 /* remplace les accolades par le ou les mots correspondants*/
@@ -53,6 +56,9 @@ char **supprimer_element_liste(char **liste, int index);
 
 /* remplace tous les jokers d'une liste de parametre par les mots correspondants et renvoie un code d'erreur sinon*/
 char* remplacer_joker(struct cmdline* l,int cmd);
+
+/* met la limite du temps processeur du processus dans lequel elle est appelé a limite (limite doit avoir été défini avant)*/
+void limiter_temps();
 
 /* exécute une commande seule*/
 void exec_cmd_simple(struct cmdline* l);

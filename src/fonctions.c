@@ -1,7 +1,7 @@
 #include "fonctions.h"
 
 struct job* liste_job = NULL;
-
+int limite = NULL;
 
 void add_jobs(int pid,char* nom){
 	//ajoute en tête
@@ -304,6 +304,12 @@ void initialiser_sigchild(){
     sigaction(SIGCHLD, &sa, NULL);
 }
 
+void limiter_temps(){
+    struct rlimit nouvelle_limite;
+    nouvelle_limite.rlim_cur = limite;
+    nouvelle_limite.rlim_max = limite + 5;
+    setrlimit(RLIMIT_CPU,&nouvelle_limite);
+}
 void exec_cmd_simple(struct cmdline* l){
 		char* message_erreur = remplacer_joker(l,0);
 
@@ -316,13 +322,27 @@ void exec_cmd_simple(struct cmdline* l){
         
             // commande job 
 			if (strcmp(l->seq[0][0], "jobs") == 0) {
-				//int pid = fork();
 				delete_job();
 				print_jobs();
 			}
+            if (strcmp(l->seq[0][0], "ulimit") == 0){
+                if(l->seq[0][2] != NULL){
+                    printf("ulimite prend au max un paramètre \n");
+                    return;
+                }
+                int nouvelle_limite = atoi(l->seq[0][1]);
+                if(nouvelle_limite == 0){
+                    printf("ulimite doit etre un nombre positif non nul \n");
+                    return;
+                }
+                limite = nouvelle_limite;
+                printf("limite fixée a %is \n",limite);
+                return;
+            }
 			else{
 				int pid = fork();
 				if(pid == 0){
+                    if(limite != NULL)limiter_temps();
 					if (l->in){ // si il y a un fichier en entrée
 						int fd_in = open(l->in,O_RDONLY);
 						dup2(fd_in,STDIN);
