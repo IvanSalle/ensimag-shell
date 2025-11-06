@@ -280,7 +280,7 @@ void handler_childsig(int sig) {
 
                 char buf[256];
                 int len = snprintf(buf, sizeof(buf),
-                                   "pid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\n",cur->pid, cur->nom, hours, minutes, secs, useconds);
+                                   "\npid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\nensishell>",cur->pid, cur->nom, hours, minutes, secs, useconds);
                 write(STDOUT_FILENO, buf, len);
                 // supprimer le processus de la liste des jobs
                 if(prev){
