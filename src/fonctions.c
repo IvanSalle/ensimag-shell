@@ -1,7 +1,7 @@
 #include "fonctions.h"
 
 struct job* liste_job = NULL;
-int limite = NULL;
+int limite = -1;
 
 void add_jobs(int pid,char* nom){
 	//ajoute en tête
@@ -10,7 +10,7 @@ void add_jobs(int pid,char* nom){
 	new_job->nom = strdup(nom);
     // ajoute le temps de début
     struct timeval time;
-    int ret = gettimeofday(&time,NULL);
+    gettimeofday(&time,NULL);
     new_job->start_time = time;
 	if(liste_job == NULL){
 		new_job->suivant = NULL;
@@ -181,13 +181,12 @@ char* remplacer_joker(struct cmdline* l,int cmd){
             else if (tilde || dollar) {
                 wordexp_t w;
                 int ret = wordexp(mot,&w,0);
-                int taille = strlen(mot);
                 if (ret != 0){
                     fprintf(stderr, "wordexp failed: %d\n", ret);
                 }
                 else{
                     int mot_different = 1;
-                    for(int i=0; i<w.we_wordc; i++){
+                    for(size_t i=0; i<w.we_wordc; i++){
                         int ret = strcmp(w.we_wordv[i],mot);
                         if(ret == 0){
                             mot_different = 0;
@@ -351,7 +350,7 @@ void exec_cmd_simple(struct cmdline* l){
 			else{
 				int pid = fork();
 				if(pid == 0){
-                    if(limite != NULL)limiter_temps();
+                    if(limite != -1) limiter_temps();
 					if (l->in){ // si il y a un fichier en entrée
 						int fd_in = open(l->in,O_RDONLY);
 						dup2(fd_in,STDIN);
