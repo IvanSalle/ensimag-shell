@@ -1,6 +1,6 @@
 #include "fonctions.h"
 
-struct job* liste_job = NULL;
+job* liste_job = NULL;
 int limite = -1;
 
 void add_jobs(int pid,char* nom){
@@ -12,12 +12,7 @@ void add_jobs(int pid,char* nom){
     struct timeval time;
     gettimeofday(&time,NULL);
     new_job->start_time = time;
-	if(liste_job == NULL){
-		new_job->suivant = NULL;
-	}
-	else{
-		new_job->suivant = liste_job;
-	}
+	new_job->suivant = liste_job;
 	liste_job = new_job;
 }
 
@@ -254,13 +249,15 @@ char* remplacer_joker(struct cmdline* l,int cmd){
 void handler_childsig(int sig) {
     (void)sig;
 
-    job* prev = NULL;
     int status;
     pid_t pid;
+    job* prev;
+    job* cur;
 
     // Récupérer tous les fils terminés
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        job* cur = liste_job;
+        prev = NULL;
+        cur = liste_job;
         while (cur) {
             if (cur->pid == pid) {
                 struct timeval cur_time;
@@ -278,15 +275,14 @@ void handler_childsig(int sig) {
                 long secs    = seconds % 60;
 
                 char buf[256];
-                int len = snprintf(buf, sizeof(buf),
-                                   "\npid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\nensishell>",cur->pid, cur->nom, hours, minutes, secs, useconds);
+                int len = snprintf(buf, sizeof(buf), "\npid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\nensishell>",cur->pid, cur->nom, hours, minutes, secs, useconds);
                 write(STDOUT_FILENO, buf, len);
                 // supprimer le processus de la liste des jobs
                 if(prev){
-				prev->suivant = cur->suivant;
-				free(cur->nom);
-				free(cur);
-				cur = prev->suivant;
+                    prev->suivant = cur->suivant;
+                    free(cur->nom);
+                    free(cur);
+                    cur = prev->suivant;
                 }
                 else{
                     liste_job = cur->suivant;
@@ -330,10 +326,9 @@ void exec_cmd_simple(struct cmdline* l){
         
             // commande job 
 			if (strcmp(l->seq[0][0], "jobs") == 0) {
-				delete_job();
 				print_jobs();
 			}
-            if (strcmp(l->seq[0][0], "ulimit") == 0){
+            else if (strcmp(l->seq[0][0], "ulimit") == 0){
                 if(l->seq[0][2] != NULL){
                     printf("ulimite prend au max un paramètre \n");
                     return;
