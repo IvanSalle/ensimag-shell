@@ -184,9 +184,18 @@ char* remplacer_joker(struct cmdline* l,int cmd){
                 int taille = strlen(mot);
                 if (ret != 0){
                     fprintf(stderr, "wordexp failed: %d\n", ret);
-                } 
+                }
                 else{
-                    mots_a_traite = ajouter_listes(mots_a_traite,w.we_wordv);
+                    int mot_different = 1;
+                    for(int i=0; i<w.we_wordc; i++){
+                        int ret = strcmp(w.we_wordv[i],mot);
+                        if(ret == 0){
+                            mot_different = 0;
+                        }
+                    }
+                    if(mot_different){
+                        mots_a_traite = ajouter_listes(mots_a_traite,w.we_wordv);
+                    }
                     wordfree(&w);
                 }
                 mots_a_traite = supprimer_element_liste(mots_a_traite,mot_courant);
@@ -367,7 +376,7 @@ void exec_cmd_simple(struct cmdline* l){
 			}		
 };
 
-void exec_cmd_avec_pipes(struct cmdline* l){
+/* void exec_cmd_avec_pipes(struct cmdline* l){
     
 			int nb_cmd = 0;
 			while(l->seq[nb_cmd] != NULL) {
@@ -444,4 +453,77 @@ void exec_cmd_avec_pipes(struct cmdline* l){
 					waitpid(liste_pid[i],&status,0);
 				}
 			}
-		}
+		}*/
+
+void exec_cmd_avec_pipes(struct cmdline* l){
+    int nb_cmd = 0;
+    while(l->seq[nb_cmd] != NULL) {
+        nb_cmd++;
+    }
+    // variables
+    int prev_pipe_out;
+    int cur_pipe[2];
+    int pid;
+    int prev_existe = 0;
+    int background = 0;
+    int liste_pid[nb_cmd];
+    for (int i=0; i<nb_cmd; i++){
+
+        char* message_erreur = remplacer_joker(l,i);
+
+        if (message_erreur) {
+            printf("Erreur : %s\n", message_erreur);
+            free(message_erreur);
+            return;
+        }
+
+        if(i < nb_cmd - 1) pipe(cur_pipe); // si pas dernier on creer un nouveau pipe
+        pid = fork();
+        if (pid == 0){
+            if (l->in){ // si il y a un fichier en entrée
+                int fd_in = open(l->in,O_RDONLY);
+                dup2(fd_in,STDIN);
+                close(fd_in);
+            }
+            if (l->out){ //si il y a un fichier en sortie
+                int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+                ftruncate(fd_out, 0);
+                dup2(fd_out,STDOUT);
+                close(fd_out);
+            }
+            if(prev_existe){// si pas la premiere commande (si il y a un prev_pipe)
+                // on met la lecture du pipe dans l'entrée standard
+                dup2(prev_pipe_out,STDIN);
+                close(prev_pipe_out);
+            }
+            //si pas la derniere commande
+            if(i < nb_cmd - 1  ){
+                // on ecrit dans le pipe avec la sortie standard
+                dup2(cur_pipe[1],STDOUT);
+                close(cur_pipe[1]);
+            }
+            
+            execvp(l->seq[i][0],l->seq[i]);
+            perror("erreur");
+            exit(1);
+        }	
+        if(prev_existe){
+            close(prev_pipe_out);
+        }
+        // Le parent ferme l'extrémité d'écriture qu'il n'utilise jamais
+        if(i < nb_cmd - 1){
+            close(cur_pipe[1]);
+            prev_pipe_out = cur_pipe[0];
+            prev_existe = 1;
+        }
+        if(l->bg) background = 1 ;// toutes les commandes s'execute en fond
+        // on ajoute le pid a la liste
+        liste_pid[i] = pid;
+    }
+    if(!background){
+        int status;
+        for(int i =0; i<nb_cmd; i++){
+            waitpid(liste_pid[i],&status,0);
+        }
+    }
+}
