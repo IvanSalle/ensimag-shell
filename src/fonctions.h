@@ -23,6 +23,7 @@
 
 
 typedef struct job {
+	int job_number;  // Numéro du job dans le shell
 	int pid;
 	char* nom;
 	struct timeval start_time;

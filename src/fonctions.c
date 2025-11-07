@@ -3,17 +3,47 @@
 job* liste_job = NULL;
 int limite = -1;
 
-void add_jobs(int pid,char* nom){
+// trouve le plus petit numéro de job disponible
+int get_next_job_number() {
+	if (!liste_job) return 1;
+	
+	int max_num = 0;
+	job* cur = liste_job;
+	while (cur) {
+		if (cur->job_number > max_num) max_num = cur->job_number;
+		cur = cur->suivant;
+	}
+	
+	for (int i = 1; i <= max_num + 1; i++) {
+		int used = 0;
+		cur = liste_job;
+		while (cur) {
+			if (cur->job_number == i) {
+				used = 1;
+				break;
+			}
+			cur = cur->suivant;
+		}
+		if (!used) return i;
+	}
+	return 1;
+}
+
+void add_jobs(int pid, char* nom) {
 	//ajoute en tête
 	job* new_job = malloc(sizeof(job));
+	new_job->job_number = get_next_job_number();
 	new_job->pid = pid;
 	new_job->nom = strdup(nom);
     // ajoute le temps de début
     struct timeval time;
-    gettimeofday(&time,NULL);
+    gettimeofday(&time, NULL);
     new_job->start_time = time;
 	new_job->suivant = liste_job;
 	liste_job = new_job;
+	
+	// Affichage comme dans un terminal : [n] pid
+	printf("[%d] %d\n", new_job->job_number, new_job->pid);
 }
 
 void delete_job(){
@@ -50,57 +80,80 @@ void print_jobs(){
 		job* cur = liste_job;
 		printf("commandes en tâche de fond:\n");
 		while(cur){
-			printf(" pid: %i , commande: %s \n", cur->pid,cur->nom);
+			printf("[%d]  pid: %i , commande: %s \n", cur->job_number, cur->pid, cur->nom);
 			cur = cur->suivant;
 		}	
 }
 
 char **gerer_accolade_mot_simple(const char *word) {
-    const char *open = strchr(word, '{');
-    if (!open) {
-        // Aucun joker d'accolade → tableau avec un seul mot
+    const char *search_start = word;
+    const char *open = NULL;
+    const char *close = NULL;
+    
+    // chercher la première paire d'accolades non vides
+    while ((open = strchr(search_start, '{'))) {
+        close = strchr(open, '}');
+        
+        // Accolade ouvrante sans fermante
+        if (!close || close < open) {
+            char **res = malloc(2 * sizeof(char *));
+            res[0] = strdup(word);
+            res[1] = NULL;
+            return res;
+        }
+        
+        size_t brace_len = close - open - 1;
+        
+        // Si accolades non vides, on les traite
+        if (brace_len > 0) {
+            break;
+        }
+        
+        // accolades vides, continuer la recherche après
+        search_start = close + 1;
+    }
+    
+    // aucune accolade ou que des accolades vides
+    if (!open || !close) {
         char **res = malloc(2 * sizeof(char *));
         res[0] = strdup(word);
         res[1] = NULL;
         return res;
     }
 
-    const char *close = strchr(open, '}');
-    if (!close || close < open) {
-        // Accolades mal formées
-        fprintf(stderr, "Erreur: accolades non fermées dans '%s'\n", word);
-        char **res = malloc(2 * sizeof(char *));
-        res[0] = strdup(word);
-        res[1] = NULL;
-        return res;
-    }
-
-    // Extraire préfixe et suffixe
+    // extraire préfixe et suffixe
     size_t prefix_len = open - word;
     char prefix[256];
     strncpy(prefix, word, prefix_len);
     prefix[prefix_len] = '\0';
-
     const char *suffix = close + 1;
-
-    // Extraire contenu entre accolades
+    
+    // extraire le contenu entre accolades
     size_t brace_len = close - open - 1;
-    char *brace = strndup(open + 1, brace_len);
+    char *brace_content = strndup(open + 1, brace_len);
 
-    // Tokenisation par virgule
-    char **res = malloc(64 * sizeof(char *)); // taille initiale, à agrandir si besoin
+    // séparer par virgules
+    char **res = malloc(64 * sizeof(char *));
     int count = 0;
 
-    char *token = strtok(brace, ",");
+    char *token = strtok(brace_content, ",");
     while (token) {
         char tmp[512];
         snprintf(tmp, sizeof(tmp), "%s%s%s", prefix, token, suffix);
         res[count++] = strdup(tmp);
         token = strtok(NULL, ",");
     }
+    
+    // si aucun token trouvé
+    if (count == 0) {
+        res[0] = strdup(word);
+        res[1] = NULL;
+        free(brace_content);
+        return res;
+    }
 
-    res[count] = NULL; // fin du tableau
-    free(brace);
+    res[count] = NULL;
+    free(brace_content);
 
     return res;
 }
@@ -169,9 +222,19 @@ char* remplacer_joker(struct cmdline* l,int cmd){
             char* interogation = strchr(mot, '?');
             char* crochet = strchr(mot, '[');
             if (accolade) {
-                mots_a_traite = ajouter_listes(mots_a_traite,gerer_accolade_mot_simple(mot));
-                mots_a_traite = supprimer_element_liste(mots_a_traite,mot_courant);
-                break;
+                char** resultat = gerer_accolade_mot_simple(mot);
+                // vérifie si le mot a été expansé ou est resté identique
+                if (resultat[1] != NULL || strcmp(resultat[0], mot) != 0) {
+                    // expansion a fonctionné, ajouter les résultats
+                    mots_a_traite = ajouter_listes(mots_a_traite, resultat);
+                    mots_a_traite = supprimer_element_liste(mots_a_traite, mot_courant);
+                } else {
+                    // Accolade non fermée, le mot reste identique, passer au suivant
+                    mot_courant++;
+                }
+                // Libérer le résultat temporaire
+                for (int j = 0; resultat[j]; j++) free(resultat[j]);
+                free(resultat);
             }
             else if (tilde || dollar) {
                 wordexp_t w;
@@ -274,9 +337,13 @@ void handler_childsig(int sig) {
                 long minutes = (seconds % 3600) / 60;
                 long secs    = seconds % 60;
 
-                char buf[256];
-                int len = snprintf(buf, sizeof(buf), "\npid: %d nom: %s terminé après : %02ld:%02ld:%02ld:%06ld\nensishell>",cur->pid, cur->nom, hours, minutes, secs, useconds);
+                // Affichage comme dans bash : [n]+ Done    command    temps
+                char buf[512];
+                int len = snprintf(buf, sizeof(buf), 
+                    "\n[%d]+  Done                    %s    (%02ld:%02ld:%02ld:%06ld)\nensishell> ",
+                    cur->job_number, cur->nom, hours, minutes, secs, useconds);
                 write(STDOUT_FILENO, buf, len);
+                
                 // supprimer le processus de la liste des jobs
                 if(prev){
                     prev->suivant = cur->suivant;
@@ -315,59 +382,60 @@ void limiter_temps(){
     setrlimit(RLIMIT_CPU,&nouvelle_limite);
 }
 void exec_cmd_simple(struct cmdline* l){
-		char* message_erreur = remplacer_joker(l,0);
+    char* message_erreur = remplacer_joker(l,0);
 
-         if (message_erreur) {
-            printf("Erreur : %s\n", message_erreur);
-            free(message_erreur);
+    if (message_erreur) {
+        printf("Erreur : %s\n", message_erreur);
+        free(message_erreur);
+        return;
+    }
+
+    
+        
+    // commande job 
+    if (strcmp(l->seq[0][0], "jobs") == 0) {
+        print_jobs();
+    }
+    else if (strcmp(l->seq[0][0], "ulimit") == 0){
+        if(l->seq[0][2] != NULL){
+            printf("ulimite prend au max un paramètre \n");
             return;
         }
-
-        
-            // commande job 
-			if (strcmp(l->seq[0][0], "jobs") == 0) {
-				print_jobs();
-			}
-            else if (strcmp(l->seq[0][0], "ulimit") == 0){
-                if(l->seq[0][2] != NULL){
-                    printf("ulimite prend au max un paramètre \n");
-                    return;
-                }
-                int nouvelle_limite = atoi(l->seq[0][1]);
-                if(nouvelle_limite == 0){
-                    printf("ulimite doit etre un nombre positif non nul \n");
-                    return;
-                }
-                limite = nouvelle_limite;
-                printf("limite fixée a %is \n",limite);
-                return;
+        int nouvelle_limite = atoi(l->seq[0][1]);
+        if(nouvelle_limite == 0){
+            printf("ulimite doit etre un nombre positif non nul \n");
+            return;
+        }
+        limite = nouvelle_limite;
+        printf("limite fixée a %is \n",limite);
+        return;
+    }
+    else{
+        int pid = fork();
+        if(pid == 0){
+            if(limite != -1) limiter_temps();
+            if (l->in){ // si il y a un fichier en entrée
+                int fd_in = open(l->in,O_RDONLY);
+                dup2(fd_in,STDIN);
+                close(fd_in);
             }
-			else{
-				int pid = fork();
-				if(pid == 0){
-                    if(limite != -1) limiter_temps();
-					if (l->in){ // si il y a un fichier en entrée
-						int fd_in = open(l->in,O_RDONLY);
-						dup2(fd_in,STDIN);
-						close(fd_in);
-					}
-					if (l->out){ //si il y a un fichier en sortie
-						int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
-						ftruncate(fd_out, 0);
-						dup2(fd_out,STDOUT);
-						close(fd_out);
-					}
-					execvp(l->seq[0][0],l->seq[0]);
-				}
-				if(l->bg){ // tache de fond
-					// on ajoute dans la liste
-					add_jobs(pid,l->seq[0][0]);
-				}
-				else{
-					int wstatus;
-                    waitpid(pid, &wstatus, 0);
-				}
-			}		
+            if (l->out){ //si il y a un fichier en sortie
+                int fd_out = open(l->out,O_WRONLY | O_CREAT, 0644); 
+                ftruncate(fd_out, 0);
+                dup2(fd_out,STDOUT);
+                close(fd_out);
+            }
+            execvp(l->seq[0][0],l->seq[0]);
+        }
+        if(l->bg){ // tache de fond
+            // on ajoute dans la liste
+            add_jobs(pid,l->seq[0][0]);
+        }
+        else{
+            int wstatus;
+            waitpid(pid, &wstatus, 0);
+        }
+    }		
 }
 
 void exec_cmd_avec_pipes(struct cmdline* l){
